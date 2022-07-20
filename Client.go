@@ -6,43 +6,61 @@ import (
     "sync"
 )
 
-type ClientOption struct {
-    ServicePath string
-    BasePath    string
-    FailType    int
-    Type        string
-    Address     []string
-    Username    string
-    Password    string
-    Select      int
-}
-
-type Client client.XClient
-
-var (
-    lockClient sync.Map
+type (
+    ClientConn struct {
+        Client    client.XClient
+        Discovery client.ServiceDiscovery
+    }
+    Client client.XClient
 )
 
-func GetRPCClient(servicePath string, addr string) Client {
-    obj, ok := lockClient.Load(addr)
-    if !ok {
-        dis, err := client.NewPeer2PeerDiscovery(addr, "")
-        if err != nil {
-            return nil
-        }
-        p := client.NewXClient(servicePath, client.Failfast, client.ConsistentHash, dis, client.DefaultOption)
-        lockClient.Store(addr, p)
-        return p
-    } else {
-        return obj.(Client)
+func (o *ClientConn) UpdateAddress(addr []string) bool {
+    var ptr interface{} = o.Discovery
+    switch u := ptr.(type) {
+    case *client.MultipleServersDiscovery:
+        u.Update(ParseAddress(addr))
+        return true
     }
+    return false
 }
 
-func NewMultipleServersDiscovery(addrs []string) client.ServiceDiscovery {
-    var kvs []*client.KVPair
-    for _, addr := range addrs {
+var (
+    mu      sync.RWMutex
+    clients = map[string]*ClientConn{}
+)
+
+func GetClientMultiple(servicePath string, addr ...string) *ClientConn {
+    mu.RLock()
+    obj, ok := clients[servicePath]
+    mu.RUnlock()
+    if ok {
+        return obj
+    }
+
+    dis, err := client.NewMultipleServersDiscovery(ParseAddress(addr))
+    if err != nil {
+        return nil
+    }
+    p := client.NewXClient(servicePath, client.Failtry, client.ConsistentHash, dis, client.DefaultOption)
+    obj = &ClientConn{
+        Client:    p,
+        Discovery: dis,
+    }
+    mu.Lock()
+    clients[servicePath] = obj
+    mu.Unlock()
+    return obj
+
+}
+
+func ParseAddress(ss []string) (kvs []*client.KVPair) {
+    for _, addr := range ss {
         kvs = append(kvs, &client.KVPair{Key: addr})
     }
+    return
+}
+func NewMultipleServersDiscovery(addrs []string) client.ServiceDiscovery {
+    var kvs = ParseAddress(addrs)
     dis, _ := client.NewMultipleServersDiscovery(kvs)
     return dis
 }
@@ -54,24 +72,8 @@ func NewRedisDiscovery(servicePath, basePath, username, password string, servers
     })
     return dis
 }
-func NewEtcdv3Discovery(path string, path2 string, username string, password string, address []string) client.ServiceDiscovery {
-    panic("not impl")
-}
-func NewXClient(opt *ClientOption) client.XClient {
-    var d client.ServiceDiscovery
-    switch opt.Type {
-    case "multiple":
-        d = NewMultipleServersDiscovery(opt.Address)
-    case "redis":
-        d = NewRedisDiscovery(opt.ServicePath, opt.BasePath, opt.Username, opt.Password, opt.Address)
-    case "etcdv3":
-        d = NewEtcdv3Discovery(opt.ServicePath, opt.BasePath, opt.Username, opt.Password, opt.Address)
-    }
-    cli := client.NewXClient(opt.ServicePath, client.FailMode(opt.FailType), client.SelectMode(opt.Select), d, client.DefaultOption)
-    return cli
-}
 
-func NewClientMultiple(addr []string, ServicePath string) client.XClient {
+func NewClientMultiple(addr []string, ServicePath string) (client.XClient, *client.MultipleServersDiscovery) {
     discovery := NewMultipleServersDiscovery(addr)
-    return client.NewXClient(ServicePath, client.Failtry, client.ConsistentHash, discovery, client.DefaultOption)
+    return client.NewXClient(ServicePath, client.Failtry, client.ConsistentHash, discovery, client.DefaultOption), discovery.(*client.MultipleServersDiscovery)
 }
