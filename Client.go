@@ -3,7 +3,6 @@ package rpcxr
 import (
     "github.com/rpcxio/libkv/store"
     "github.com/smallnest/rpcx/client"
-    "sync"
 )
 
 type (
@@ -22,35 +21,6 @@ func (o *ClientConn) UpdateAddress(addr []string) bool {
         return true
     }
     return false
-}
-
-var (
-    mu      sync.RWMutex
-    clients = map[string]*ClientConn{}
-)
-
-func GetClientMultiple(servicePath string, addr ...string) *ClientConn {
-    mu.RLock()
-    obj, ok := clients[servicePath]
-    mu.RUnlock()
-    if ok {
-        return obj
-    }
-
-    dis, err := client.NewMultipleServersDiscovery(ParseAddress(addr))
-    if err != nil {
-        return nil
-    }
-    p := client.NewXClient(servicePath, client.Failtry, client.ConsistentHash, dis, client.DefaultOption)
-    obj = &ClientConn{
-        Client:    p,
-        Discovery: dis,
-    }
-    mu.Lock()
-    clients[servicePath] = obj
-    mu.Unlock()
-    return obj
-
 }
 
 func ParseAddress(ss []string) (kvs []*client.KVPair) {
