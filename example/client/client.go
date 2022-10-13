@@ -4,7 +4,6 @@ import (
     "bufio"
     "context"
     "github.com/DGHeroin/rpcxr"
-    "github.com/DGHeroin/rpcxr/global"
     "log"
     "os"
     "strings"
@@ -12,7 +11,7 @@ import (
 )
 
 func main() {
-    cc := global.GetClientMultiple("s")
+    cc := globalRPC.GetClientMultiple("s")
     cc.UpdateAddress([]string{"127.0.0.1:20001"})
 }
 func main2() {

@@ -1,4 +1,4 @@
-package global
+package globalRPC
 
 import (
     "github.com/DGHeroin/rpcxr"
@@ -13,10 +13,11 @@ var (
 
 type (
     option struct {
-        Retries    int
-        Address    []string
-        FailMode   client.FailMode
-        SelectMode client.SelectMode
+        Retries      int
+        Address      []string
+        FailMode     client.FailMode
+        SelectMode   client.SelectMode
+        customOption *client.Option
     }
     Option func(*option)
 )
@@ -54,7 +55,6 @@ func HasClient(servicePath string) bool {
     _, ok := getClient(servicePath)
     return ok
 }
-
 func GetClientWithOption(servicePath string, opts ...Option) *rpcxr.ClientConn {
     obj, ok := getClient(servicePath)
     if ok {
@@ -70,6 +70,9 @@ func GetClientWithOption(servicePath string, opts ...Option) *rpcxr.ClientConn {
     }
     dfOpt := client.DefaultOption
     dfOpt.Retries = o.Retries
+    if o.customOption != nil {
+        dfOpt = *o.customOption
+    }
     p := client.NewXClient(servicePath, o.FailMode, o.SelectMode, dis, dfOpt)
     obj = &rpcxr.ClientConn{
         Client:    p,
@@ -91,5 +94,10 @@ func WithAddress(addr []string) Option {
 func WithRetries(retries int) Option {
     return func(o *option) {
         o.Retries = retries
+    }
+}
+func WithCustomOption(opt *client.Option) Option {
+    return func(o *option) {
+        o.customOption = opt
     }
 }
