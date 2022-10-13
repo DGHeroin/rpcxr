@@ -101,3 +101,13 @@ func WithCustomOption(opt *client.Option) Option {
         o.customOption = opt
     }
 }
+func WithFailMode(mode int) Option {
+    return func(o *option) {
+        o.FailMode = client.FailMode(mode)
+    }
+}
+func WithSelectMode(mode int) Option {
+    return func(o *option) {
+        o.SelectMode = client.SelectMode(mode)
+    }
+}
